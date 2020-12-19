@@ -1,89 +1,13 @@
-aliases:
-  - &restore-yarn-cache
-    keys:
-      - v1-yarn-{{ .Branch }}-{{ checksum "website/yarn.lock" }}
-      # Fallback in case checksum fails
-      - v1-yarn-{{ .Branch }}-
-
-  - &save-yarn-cache
-    paths:
-      - website/node_modules
-      - ~/.cache/yarn
-    key: v1-yarn-{{ .Branch }}-{{ checksum "website/yarn.lock" }}
-
-  - &filter-only-master
-    branches:
-      only:
-        - master
-  
-  - &filter-ignore-gh-pages
-    branches:
-      ignore: gh-pages
-
-defaults: &defaults
-  working_directory: ~/react-native-website
-  docker:
-    - image: circleci/node:8
-
-version: 2
-jobs:
-  # Tests website
-  test-website:
-    <<: *defaults
-    steps:
-      - checkout
-      - run:
-          name: Install Dependencies
-          command: |
-            cd website
-            yarn install --no-progress --non-interactive --cache-folder ~/.cache/yarn
-      - run:
-          name: Check Formatting with Prettier
-          command: |
-            cd website
-            yarn ci-check
-      - run:
-          name: Test Website
-          command: |
-            cd website
-            yarn test
-
-  # Deploys website 
-  deploy-website:
-    <<: *defaults
-    steps:
-      - checkout
-      - run:
-          name: Install Dependencies
-          command: |
-            cd website
-            yarn --no-progress
-            sudo apt install rsync
-      - run:
-          name: Build and Deploy Static Website
-          command: |
-            if [[ $CIRCLE_PROJECT_USERNAME == "facebook" && -z $CI_PULL_REQUEST && -z $CIRCLE_PR_USERNAME ]]; then
-              git config --global user.email "reactjs-bot@users.noreply.github.com"
-              git config --global user.name "Website Deployment Script"
-              echo "machine github.com login reactjs-bot password $GITHUB_TOKEN" > ~/.netrc
-              echo "Deploying website..."
-              cd website && GIT_USER=reactjs-bot CIRCLE_PROJECT_REPONAME=react-native yarn run publish-gh-pages
-            else
-              echo "Skipping deploy."
-            fi
-
-# Workflows enables us to run multiple jobs in parallel
+# Use the latest 2.1 version of CircleCI pipeline process engine. See: https://circleci.com/docs/2.0/configuration-reference
+version: 2.1
+# Use a package of configuration called an orb.
+orbs:
+  # Declare a dependency on the welcome-orb
+  welcome: circleci/welcome-orb@0.4.1
+# Orchestrate or schedule a set of jobs
 workflows:
-  version: 2
-
-  build:
+  # Name the workflow "welcome"
+  welcome:
+    # Run the welcome/run job in its own container
     jobs:
-      # Test website
-      - test-website:
-          filters: *filter-ignore-gh-pages
-    
-      # If we are on master, deploy docs
-      - deploy-website:
-          filters: *filter-only-master
-          requires:
-            - test-website
+      - welcome/run
